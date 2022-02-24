@@ -1,6 +1,6 @@
 ## go-infector
 
-control timeout and retry in distributed microservice !!!
+🌈 control timeout and retry in distributed microservice !!! 
 
 ![](./docs/desc.jpg)
 
@@ -14,7 +14,7 @@ control timeout and retry in distributed microservice !!!
 
 ### Usage
 
-...
+please review the code.
 
 ### Example
 
@@ -22,4 +22,4 @@ request trace:
 
 > client -> proxy -> user
 
-[easy full example](github.com/rfyiamcool/go-infector/example)
+[ 🔥 easy full example 🔥 ](https://github.com/rfyiamcool/go-infector/tree/main/example)

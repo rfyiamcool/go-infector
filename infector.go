@@ -284,10 +284,27 @@ func (sc *SpanContext) InjectHeader(mapper interface{}) {
 	InjectHeaderCtx(sc.ctx, mapper, sc.RetryFlag)
 }
 
-// GetHttpHeader
+// injectHeader
+func (sc *SpanContext) injectHeader(_header interface{}) {
+	header := WrapMapper(_header)
+
+	// set retry
+	header.Set(headerKeyRetry, sc.RetryFlag)
+
+	// set time
+	header.Set(headerKeyDeadline, formatUnixTime(sc.Deadline))
+	header.Set(headerKeyTimeout, "0") // default zero
+
+	diff := sc.Deadline.Sub(time.Now()).Milliseconds()
+	if diff > 0 {
+		header.Set(headerKeyTimeout, strconv.FormatInt(diff, 10))
+	}
+}
+
+// GetHttpHeader inject infector'args to header, then return the header. if don't input custom header, new header.
 func (sc *SpanContext) GetHttpHeader(hdrs ...http.Header) http.Header {
 	header := http.Header{}
-	InjectHeaderCtx(sc.ctx, header, sc.RetryFlag)
+	sc.injectHeader(header)
 
 	if len(hdrs) == 0 {
 		return header
@@ -300,10 +317,10 @@ func (sc *SpanContext) GetHttpHeader(hdrs ...http.Header) http.Header {
 	return header
 }
 
-// GetGrpcMetadata
+// GetGrpcMetadata inject infector'args to header, then return the header.
 func (sc *SpanContext) GetGrpcMetadata(mds ...metadata.MD) metadata.MD {
 	md := metadata.Pairs()
-	InjectHeaderCtx(sc.ctx, md, sc.RetryFlag)
+	sc.injectHeader(md)
 
 	if len(mds) == 0 {
 		return md

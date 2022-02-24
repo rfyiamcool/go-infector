@@ -16,30 +16,16 @@ var (
 func handleRequest() {
 	start := time.Now()
 
+	// span
 	span := infector.NewSpanContext(context.Background(), 2*time.Second, infector.RetryOff)
 	defer span.Cancel()
 
-	header := span.GetHttpHeader()
-	header.Set("custom-key1", "custom-val1")
+	// request
+	header := span.GetHttpHeader()           // inject infector args to header, then return the header
+	header.Set("custom-key1", "custom-val1") // set custom kv in header.
 	resp, err := req.Get(url, header)
-
 	log.Println(resp.String(), err)
-	log.Println(time.Since(start).String())
-}
 
-func handleGinMiddleware() {
-	start := time.Now()
-
-	span := infector.NewSpanContext(context.Background(), 1*time.Second, infector.RetryOff)
-	defer span.Cancel()
-
-	header := span.GetHttpHeader()
-	header.Set("custom-key1", "custom-val1")
-
-	time.Sleep(2 * time.Second) // make delay case
-	resp, err := req.Get(url, header)
-
-	log.Println(resp.String(), err)
 	log.Println(time.Since(start).String())
 }
 
