@@ -1,6 +1,8 @@
-## infector
+## go-infector
 
 control timeout and retry in distributed microservice !!!
+
+![](./docs/desc.jpg)
 
 **feature:**
 
@@ -10,4 +12,14 @@ control timeout and retry in distributed microservice !!!
 - http middleware
 - redis hook
 
-![](./docs/desc.jpg)
+### Usage
+
+...
+
+### Example
+
+request trace:
+
+> client -> proxy -> user
+
+[easy full example](github.com/rfyiamcool/go-infector/example)

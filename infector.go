@@ -3,9 +3,12 @@ package infector
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -73,6 +76,8 @@ func InjectHeaderCtx(ctx context.Context, _header interface{}, retry string) {
 	}
 
 	header.Set(headerKeyDeadline, formatUnixTime(due))
+	header.Set(headerKeyTimeout, "0") // default zero
+
 	diff := due.Sub(time.Now()).Milliseconds()
 	if diff > 0 {
 		header.Set(headerKeyTimeout, strconv.FormatInt(diff, 10))
@@ -140,19 +145,6 @@ func ParseHeader(hdr interface{}) (time.Duration, string, error) {
 	return timeout, retry, err
 }
 
-const headerCtx = "infector_header"
-
-// ParseSpanFromHeader header type is in the range of http.header, grpc.metadata and map.
-func ParseSpanFromHeader(ctx context.Context, header interface{}) (*SpanContext, error) {
-	timeout, retry, err := ParseHeader(header)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx = context.WithValue(ctx, headerCtx, header)
-	return NewSpanContext(ctx, timeout, retry), nil
-}
-
 // ParseEntry
 func ParseEntry(ctx context.Context, header interface{}) (*Entry, error) {
 	timeout, retry, err := ParseHeader(header)
@@ -165,6 +157,19 @@ func ParseEntry(ctx context.Context, header interface{}) (*Entry, error) {
 		Deadline: time.Now().Add(timeout),
 		Retry:    retry,
 	}, nil
+}
+
+const headerCtx = "infector_header"
+
+// ParseSpanFromHeader header type is in the range of http.header, grpc.metadata and map.
+func ParseSpanFromHeader(ctx context.Context, header interface{}) (*SpanContext, error) {
+	timeout, retry, err := ParseHeader(header)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx = context.WithValue(ctx, headerCtx, header)
+	return NewSpanContext(ctx, timeout, retry), nil
 }
 
 // ParseSpanFromCtx
@@ -198,8 +203,10 @@ type SpanContext struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	Deadline  time.Time
-	Timeout   time.Duration
+	TimeExists bool
+	Deadline   time.Time
+	Timeout    time.Duration
+
 	RetryFlag string
 }
 
@@ -277,6 +284,36 @@ func (sc *SpanContext) InjectHeader(mapper interface{}) {
 	InjectHeaderCtx(sc.ctx, mapper, sc.RetryFlag)
 }
 
+// GetHttpHeader
+func (sc *SpanContext) GetHttpHeader(hdrs ...http.Header) http.Header {
+	header := http.Header{}
+	InjectHeaderCtx(sc.ctx, header, sc.RetryFlag)
+
+	if len(hdrs) == 0 {
+		return header
+	}
+	for k, vs := range hdrs[0] {
+		for _, v := range vs {
+			header.Set(k, v)
+		}
+	}
+	return header
+}
+
+// GetGrpcMetadata
+func (sc *SpanContext) GetGrpcMetadata(mds ...metadata.MD) metadata.MD {
+	md := metadata.Pairs()
+	InjectHeaderCtx(sc.ctx, md, sc.RetryFlag)
+
+	if len(mds) == 0 {
+		return md
+	}
+	for k, vs := range mds[0] {
+		md.Set(k, vs...)
+	}
+	return md
+}
+
 // NotTimeout
 func (sc *SpanContext) NotTimeout() bool {
 	return !sc.ReachTimeout()
@@ -284,8 +321,8 @@ func (sc *SpanContext) NotTimeout() bool {
 
 // ReachTimeout
 func (sc *SpanContext) ReachTimeout() bool {
-	if sc.Deadline.IsZero() { // if deadline is invalid, status is not timeout
-		return false
+	if sc.Deadline.IsZero() {
+		return true
 	}
 	if time.Now().After(sc.Deadline) {
 		return true
@@ -305,7 +342,7 @@ func convTime(msec int64) time.Time {
 
 // convDuration
 func convDuration(msec int64) time.Duration {
-	return time.Duration(msec * time.Hour.Milliseconds())
+	return time.Duration(msec) * time.Millisecond
 }
 
 // formatRetryFlag
