@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	ErrHeaderRequestTimeout = errors.New("the timeout-ms value in header is already timeout.")
+	ErrHeaderRequestTimeout = errors.New("the timeout-ms value in header is 0, not enough time.")
 	ErrRequestTimeout       = errors.New("request timeout.")
 )
 
@@ -60,6 +60,7 @@ func GinMiddleware(opts ...OptionGinFunc) gin.HandlerFunc {
 				c.Writer.Header().Set(k, v[0])
 			}
 			c.JSON(200, option.response)
+			c.Abort()
 			return
 		}
 
