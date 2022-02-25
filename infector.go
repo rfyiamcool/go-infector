@@ -159,7 +159,11 @@ func ParseEntry(ctx context.Context, header interface{}) (*Entry, error) {
 	}, nil
 }
 
-const headerCtx = "infector_header"
+const (
+	headerCtx = "infector_header"
+	spanCtx   = "infector_span"
+	entryCtx  = "infector_entry"
+)
 
 // ParseSpanFromHeader header type is in the range of http.header, grpc.metadata and map.
 func ParseSpanFromHeader(ctx context.Context, header interface{}) (*SpanContext, error) {
@@ -169,33 +173,18 @@ func ParseSpanFromHeader(ctx context.Context, header interface{}) (*SpanContext,
 	}
 
 	ctx = context.WithValue(ctx, headerCtx, header)
-	return NewSpanContext(ctx, timeout, retry), nil
+	span := NewSpanContext(ctx, timeout, retry)
+	return span, nil
 }
 
 // ParseSpanFromCtx
 func ParseSpanFromCtx(ctx context.Context) (*SpanContext, error) {
-	_value := ctx.Value(headerCtx)
+	_value := ctx.Value(spanCtx)
 	if _value == nil {
 		return nil, errors.New("unset header and retry in header")
 	}
 
-	var (
-		cancel   = func() {}
-		deadline = time.Time{}
-	)
-
-	timeout, retry, _ := ParseHeader(_value)
-	if timeout > 0 {
-		deadline = time.Now().Add(timeout)
-	}
-
-	return &SpanContext{
-		ctx:       ctx,
-		cancel:    cancel,
-		Deadline:  deadline,
-		Timeout:   timeout,
-		RetryFlag: retry,
-	}, nil
+	return _value.(*SpanContext), nil
 }
 
 // SpanContext
@@ -219,16 +208,28 @@ func NewSpanContext(ctx context.Context, timeout time.Duration, retry string) *S
 	)
 
 	if timeout > 0 {
-		cctx, cancel = context.WithTimeout(ctx, timeout)
+		cctx, cancel = context.WithTimeout(cctx, timeout)
 		deadline = time.Now().Add(timeout)
 	}
 
-	return &SpanContext{
+	span := &SpanContext{
 		ctx:       cctx,
 		cancel:    cancel,
 		Deadline:  deadline,
 		Timeout:   timeout,
 		RetryFlag: retry,
+	}
+	span.ctx = context.WithValue(cctx, spanCtx, span)
+
+	return span
+}
+
+// GetEntry get entry structure
+func (sc *SpanContext) GetEntry() *Entry {
+	return &Entry{
+		Timeout:  sc.Timeout,
+		Deadline: sc.Deadline,
+		Retry:    sc.RetryFlag,
 	}
 }
 
@@ -280,8 +281,8 @@ func (sc *SpanContext) ContinueRetry() bool {
 }
 
 // InjectHeader
-func (sc *SpanContext) InjectHeader(mapper interface{}) {
-	InjectHeaderCtx(sc.ctx, mapper, sc.RetryFlag)
+func (sc *SpanContext) InjectHeader(header interface{}) {
+	sc.injectHeader(header)
 }
 
 // injectHeader
@@ -345,6 +346,24 @@ func (sc *SpanContext) ReachTimeout() bool {
 		return true
 	}
 	return false
+}
+
+type NullSpanContext struct{}
+
+func (sc *NullSpanContext) ReachTimeout() bool {
+	return false
+}
+
+func (sc *NullSpanContext) NotTimeout() bool {
+	return false
+}
+
+func (sc *NullSpanContext) GetGrpcMetadata(mds ...metadata.MD) metadata.MD {
+	return metadata.MD{}
+}
+
+func (sc *NullSpanContext) GetHttpMetadata(header ...http.Header) http.Header {
+	return http.Header{}
 }
 
 // convUnixTime time.time to mills int64

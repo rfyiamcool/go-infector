@@ -24,7 +24,11 @@ func handleRequest() {
 	header := span.GetHttpHeader()           // inject infector args to header, then return the header
 	header.Set("custom-key1", "custom-val1") // set custom kv in header.
 	resp, err := req.Get(url, header)
-	log.Println(resp.String(), err)
+	if err == nil {
+		log.Println(resp.Response().Status)
+		log.Println(resp.String())
+		log.Println(err)
+	}
 
 	log.Println(time.Since(start).String())
 }
