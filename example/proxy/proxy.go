@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,23 +22,31 @@ func server() {
 }
 
 func handleProxy(c *gin.Context) {
-	select {
-	case <-c.Request.Context().Done():
-	case <-time.After(10 * time.Second):
+	// make delay case
+	time.Sleep(3 * time.Second)
+
+	// span
+	var (
+		header = http.Header{}
+		ctx    = c.Request.Context()
+	)
+
+	span, err := infector.ParseSpanFromCtx(ctx)
+	if err == nil {
+		defer span.Cancel()
+		header = span.GetHttpHeader()
+	}
+	log.Println(err)
+
+	// http get
+	resp, err := req.Get(url, header)
+	if err != nil {
+		log.Println(resp, err)
+		return
 	}
 
-	time.Sleep(1 * time.Second)
-
-	span, _ := infector.ParseSpanFromCtx(c.Request.Context())
-	defer span.Cancel()
-
-	header := span.GetHttpHeader()
-	resp, err := req.Get(url, header)
-	log.Println(resp, err)
-
-	c.JSON(200, gin.H{
-		"message": "resp in user",
-	})
+	c.Writer.Write(resp.Bytes())
+	c.Status(resp.Response().StatusCode)
 }
 
 func main() {
