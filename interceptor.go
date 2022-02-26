@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -18,8 +19,9 @@ var (
 )
 
 type HttpOption struct {
-	header   http.Header
-	response interface{}
+	header     http.Header
+	response   interface{}
+	LeastQuota time.Duration
 }
 
 var defaultHttpOption = HttpOption{
@@ -27,6 +29,12 @@ var defaultHttpOption = HttpOption{
 	response: map[string]string{
 		"error": ErrHeaderRequestTimeout.Error(),
 	},
+	LeastQuota: 0,
+}
+
+// SetDefaultHttpOption the function call before app register middleware.
+func SetDefaultHttpOption(ho HttpOption) {
+	defaultHttpOption = ho
 }
 
 type OptionGinFunc func(op *HttpOption)
@@ -35,6 +43,12 @@ func WithGinResponse(header http.Header, obj interface{}) OptionGinFunc {
 	return func(op *HttpOption) {
 		op.header = header
 		op.response = obj
+	}
+}
+
+func WithGinLeastQuota(quota time.Duration) OptionGinFunc {
+	return func(op *HttpOption) {
+		op.LeastQuota = quota
 	}
 }
 
@@ -55,12 +69,21 @@ func GinMiddleware(opts ...OptionGinFunc) gin.HandlerFunc {
 		c.Request = c.Request.WithContext(span.ctx)
 		defer span.Cancel()
 
-		if span.ReachTimeout() {
+		call := func() {
 			for k, v := range option.header {
 				c.Writer.Header().Set(k, v[0])
 			}
 			c.JSON(200, option.response)
 			c.Abort()
+		}
+
+		if option.LeastQuota > 0 && !span.PromiseLeastQuota(option.LeastQuota) {
+			call()
+			return
+		}
+
+		if option.LeastQuota == 0 && span.ReachTimeout() {
+			call()
 			return
 		}
 

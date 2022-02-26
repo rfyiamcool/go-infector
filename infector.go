@@ -348,12 +348,12 @@ func (sc *SpanContext) ReachTimeout() bool {
 	return false
 }
 
-// EnsureLeastQuota
-func (sc *SpanContext) EnsureLeastQuota(quota time.Duration) bool {
-	if sc.Deadline.IsZero() {
-		return false
+// PromiseLeastQuota
+func (sc *SpanContext) PromiseLeastQuota(quota time.Duration) bool {
+	if sc.Deadline.IsZero() { // if don't set timeout in trace, return true.
+		return true
 	}
-	diff := time.Since(sc.Deadline)
+	diff := sc.Deadline.Sub(time.Now())
 	if diff >= quota {
 		return true
 	}
