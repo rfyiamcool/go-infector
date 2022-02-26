@@ -14,7 +14,7 @@
 
 ### Usage
 
-please review the code.
+Please review the code.
 
 ### Example
 
