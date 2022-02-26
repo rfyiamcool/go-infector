@@ -340,9 +340,21 @@ func (sc *SpanContext) NotTimeout() bool {
 // ReachTimeout
 func (sc *SpanContext) ReachTimeout() bool {
 	if sc.Deadline.IsZero() {
-		return true
+		return false
 	}
 	if time.Now().After(sc.Deadline) {
+		return true
+	}
+	return false
+}
+
+// EnsureLeastQuota
+func (sc *SpanContext) EnsureLeastQuota(quota time.Duration) bool {
+	if sc.Deadline.IsZero() {
+		return false
+	}
+	diff := time.Since(sc.Deadline)
+	if diff >= quota {
 		return true
 	}
 	return false
