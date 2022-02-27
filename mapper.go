@@ -6,14 +6,17 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// WrapMapper
 func WrapMapper(container interface{}) Mapper {
 	return Mapper{container}
 }
 
+// Mapper match with http.Header, grpc metadata.md, map[string]string, map[string]interface{}
 type Mapper struct {
 	container interface{}
 }
 
+// Set set value by k,v
 func (ma *Mapper) Set(k, v string) {
 	switch mapper := ma.container.(type) {
 	case http.Header:
@@ -30,6 +33,7 @@ func (ma *Mapper) Set(k, v string) {
 	}
 }
 
+// Get get value by key
 func (ma *Mapper) Get(k string) string {
 	switch mapper := ma.container.(type) {
 	case http.Header:

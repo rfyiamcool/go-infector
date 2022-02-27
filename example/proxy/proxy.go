@@ -31,12 +31,16 @@ func handleProxy(c *gin.Context) {
 		ctx    = c.Request.Context()
 	)
 
+	// set custom header
+	header.Set("key-proxy", "xxx")
+
 	span, err := infector.ParseSpanFromCtx(ctx)
-	if err == nil {
+	if err == nil { // don't inject span in middleware.
 		defer span.Cancel()
-		header = span.GetHttpHeader()
+		header = span.GetHttpHeader(header)
+	} else {
+		log.Println(err.Error())
 	}
-	log.Println(err)
 
 	// http get
 	resp, err := req.Get(url, header)
