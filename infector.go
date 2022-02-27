@@ -360,7 +360,14 @@ func (sc *SpanContext) PromiseLeastQuota(quota time.Duration) bool {
 	return false
 }
 
-type NullSpanContext struct{}
+type NullSpanContext struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func (sc *NullSpanContext) Cancel() bool {
+	return false
+}
 
 func (sc *NullSpanContext) ReachTimeout() bool {
 	return false
@@ -371,11 +378,17 @@ func (sc *NullSpanContext) NotTimeout() bool {
 }
 
 func (sc *NullSpanContext) GetGrpcMetadata(mds ...metadata.MD) metadata.MD {
-	return metadata.MD{}
+	if len(mds) == 0 {
+		return metadata.MD{}
+	}
+	return mds[0]
 }
 
-func (sc *NullSpanContext) GetHttpMetadata(header ...http.Header) http.Header {
-	return http.Header{}
+func (sc *NullSpanContext) GetHttpMetadata(hdrs ...http.Header) http.Header {
+	if len(hdrs) == 0 {
+		return http.Header{}
+	}
+	return hdrs[0]
 }
 
 // convUnixTime time.time to mills int64

@@ -37,23 +37,23 @@ func SetDefaultHttpOption(ho HttpOption) {
 	defaultHttpOption = ho
 }
 
-type OptionGinFunc func(op *HttpOption)
+type optionGinFunc func(op *HttpOption)
 
-func WithGinResponse(header http.Header, obj interface{}) OptionGinFunc {
+func WithGinResponse(header http.Header, obj interface{}) optionGinFunc {
 	return func(op *HttpOption) {
 		op.header = header
 		op.response = obj
 	}
 }
 
-func WithGinLeastQuota(quota time.Duration) OptionGinFunc {
+func WithGinLeastQuota(quota time.Duration) optionGinFunc {
 	return func(op *HttpOption) {
 		op.LeastQuota = quota
 	}
 }
 
 // GinMiddleware gin middleware
-func GinMiddleware(opts ...OptionGinFunc) gin.HandlerFunc {
+func GinMiddleware(opts ...optionGinFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		option := defaultHttpOption
 		for _, opt := range opts {
@@ -69,7 +69,7 @@ func GinMiddleware(opts ...OptionGinFunc) gin.HandlerFunc {
 		c.Request = c.Request.WithContext(span.ctx)
 		defer span.Cancel()
 
-		call := func() {
+		exception := func() {
 			for k, v := range option.header {
 				c.Writer.Header().Set(k, v[0])
 			}
@@ -78,12 +78,11 @@ func GinMiddleware(opts ...OptionGinFunc) gin.HandlerFunc {
 		}
 
 		if option.LeastQuota > 0 && !span.PromiseLeastQuota(option.LeastQuota) {
-			call()
+			exception()
 			return
 		}
-
 		if option.LeastQuota == 0 && span.ReachTimeout() {
-			call()
+			exception()
 			return
 		}
 
@@ -113,8 +112,42 @@ func HttpMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// ServerInterceptor grpc server wrapper
-func ServerInterceptor() grpc.UnaryServerInterceptor {
+type GrpcUnaryOption struct {
+	header     http.Header
+	leastQuota time.Duration
+}
+
+var defaultGrpcOption = GrpcUnaryOption{
+	header:     http.Header{},
+	leastQuota: 0,
+}
+
+// SetDefaultGrpcOption
+func SetDefaultGrpcOption(dop GrpcUnaryOption) {
+	defaultGrpcOption = dop
+}
+
+type optionGrpcUnaryFunc func(op *GrpcUnaryOption)
+
+func WithGrpcResponse(header http.Header, obj interface{}) optionGrpcUnaryFunc {
+	return func(op *GrpcUnaryOption) {
+		op.header = header
+	}
+}
+
+func WithGrpcLeastQuota(quota time.Duration) optionGrpcUnaryFunc {
+	return func(op *GrpcUnaryOption) {
+		op.leastQuota = quota
+	}
+}
+
+// GrpcServerInterceptor grpc server wrapper
+func GrpcServerInterceptor(opts ...optionGrpcUnaryFunc) grpc.UnaryServerInterceptor {
+	option := defaultGrpcOption
+	for _, opt := range opts {
+		opt(&option)
+	}
+
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
@@ -127,7 +160,11 @@ func ServerInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		defer span.Cancel()
-		if span.ReachTimeout() {
+
+		if option.leastQuota > 0 && !span.PromiseLeastQuota(option.leastQuota) {
+			return nil, ErrHeaderRequestTimeout
+		}
+		if option.leastQuota == 0 && span.ReachTimeout() {
 			return nil, ErrHeaderRequestTimeout
 		}
 
