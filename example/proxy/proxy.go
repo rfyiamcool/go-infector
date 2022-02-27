@@ -42,15 +42,22 @@ func handleProxy(c *gin.Context) {
 		log.Println(err.Error())
 	}
 
-	// http get
-	resp, err := req.Get(url, header)
-	if err != nil {
-		log.Println(resp, err)
-		return
-	}
+	var retryCount = 3
+	for i := 0; i < retryCount; i++ {
+		if !span.IsRetryON() {
+			break
+		}
 
-	c.Writer.Write(resp.Bytes())
-	c.Status(resp.Response().StatusCode)
+		// http get
+		resp, err := req.Get(url, header)
+		if err != nil {
+			log.Println(resp, err)
+			return
+		}
+
+		c.Writer.Write(resp.Bytes())
+		c.Status(resp.Response().StatusCode)
+	}
 }
 
 func main() {
